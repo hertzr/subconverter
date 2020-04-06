@@ -47,7 +47,7 @@ std::string hostnameToIPAddr(const std::string &host)
         return std::string();
     }
 
-    for(cur = retAddrInfo; cur != NULL; cur=cur->ai_next)
+    for(cur = retAddrInfo; cur != NULL; cur = cur->ai_next)
     {
         if(cur->ai_family == AF_INET)
         {
@@ -413,6 +413,11 @@ void rulesetToClash(YAML::Node &base_rule, std::vector<ruleset_content> &ruleset
     {
         rule_group = x.rule_group;
         retrived_rules = x.rule_content.get();
+        if(retrived_rules.empty())
+        {
+            writeLog(0, "Failed to fetch ruleset or ruleset is empty: '" + x.rule_path + "'!", LOG_LEVEL_WARNING);
+            continue;
+        }
         if(retrived_rules.find("[]") == 0)
         {
             strLine = retrived_rules.substr(2);
@@ -489,6 +494,11 @@ std::string rulesetToClashStr(YAML::Node &base_rule, std::vector<ruleset_content
     {
         rule_group = x.rule_group;
         retrived_rules = x.rule_content.get();
+        if(retrived_rules.empty())
+        {
+            writeLog(0, "Failed to fetch ruleset or ruleset is empty: '" + x.rule_path + "'!", LOG_LEVEL_WARNING);
+            continue;
+        }
         if(retrived_rules.find("[]") == 0)
         {
             strLine = retrived_rules.substr(2);
@@ -556,6 +566,11 @@ void rulesetToSurge(INIReader &base_rule, std::vector<ruleset_content> &ruleset_
     {
         rule_group = x.rule_group;
         retrived_rules = x.rule_content.get();
+        if(retrived_rules.empty())
+        {
+            writeLog(0, "Failed to fetch ruleset or ruleset is empty: '" + x.rule_path + "'!", LOG_LEVEL_WARNING);
+            continue;
+        }
         if(retrived_rules.find("[]") == 0)
         {
             strLine = retrived_rules.substr(2);
@@ -807,7 +822,7 @@ void netchToClash(std::vector<nodeInfo> &nodes, YAML::Node &yamlnode, string_arr
             singleproxy["type"] = "ss";
             singleproxy["cipher"] = method;
             singleproxy["password"] = password;
-            if(std::all_of(password.begin(), password.end(), ::isdigit))
+            if(std::all_of(password.begin(), password.end(), ::isdigit) && !password.empty())
                 singleproxy["password"].SetTag("str");
             switch(hash_(plugin))
             {
@@ -852,13 +867,16 @@ void netchToClash(std::vector<nodeInfo> &nodes, YAML::Node &yamlnode, string_arr
                 singleproxy["network"] = transproto;
                 singleproxy["ws-path"] = path;
                 singleproxy["ws-headers"]["Host"] = host;
-                singleproxy["headers"]["Host"] = host;
                 if(edge.size())
-                {
                     singleproxy["ws-headers"]["Edge"] = edge;
-                    singleproxy["headers"]["Edge"] = edge;
-                }
                 break;
+            case "http"_hash:
+                singleproxy["network"] = transproto;
+                singleproxy["http-opts"]["method"] = "GET";
+                singleproxy["http-opts"]["path"].push_back(path);
+                singleproxy["http-opts"]["headers"]["Host"].push_back(host);
+                if(edge.size())
+                    singleproxy["http-opts"]["headers"]["Edge"].push_back(edge);
             default:
                 continue;
             }
@@ -884,7 +902,7 @@ void netchToClash(std::vector<nodeInfo> &nodes, YAML::Node &yamlnode, string_arr
             singleproxy["type"] = "ssr";
             singleproxy["cipher"] = method;
             singleproxy["password"] = password;
-            if(std::all_of(password.begin(), password.end(), ::isdigit))
+            if(std::all_of(password.begin(), password.end(), ::isdigit) && !password.empty())
                 singleproxy["password"].SetTag("str");
             singleproxy["protocol"] = protocol;
             singleproxy["protocolparam"] = protoparam;
@@ -895,7 +913,7 @@ void netchToClash(std::vector<nodeInfo> &nodes, YAML::Node &yamlnode, string_arr
             singleproxy["type"] = "socks5";
             singleproxy["username"] = username;
             singleproxy["password"] = password;
-            if(std::all_of(password.begin(), password.end(), ::isdigit))
+            if(std::all_of(password.begin(), password.end(), ::isdigit) && !password.empty())
                 singleproxy["password"].SetTag("str");
             if(ext.skip_cert_verify)
                 singleproxy["skip-cert-verify"] = true;
@@ -904,16 +922,19 @@ void netchToClash(std::vector<nodeInfo> &nodes, YAML::Node &yamlnode, string_arr
             singleproxy["type"] = "http";
             singleproxy["username"] = username;
             singleproxy["password"] = password;
-            if(std::all_of(password.begin(), password.end(), ::isdigit))
+            if(std::all_of(password.begin(), password.end(), ::isdigit) && !password.empty())
                 singleproxy["password"].SetTag("str");
             singleproxy["tls"] = type == "HTTPS";
             if(ext.skip_cert_verify)
                 singleproxy["skip-cert-verify"] = true;
             break;
         case SPEEDTEST_MESSAGE_FOUNDTROJAN:
+            host = GetMember(json, "Host");
             singleproxy["type"] = "trojan";
             singleproxy["password"] = password;
-            if(std::all_of(password.begin(), password.end(), ::isdigit))
+            if(host.size())
+                singleproxy["sni"] = host;
+            if(std::all_of(password.begin(), password.end(), ::isdigit) && !password.empty())
                 singleproxy["password"].SetTag("str");
             if(ext.skip_cert_verify)
                 singleproxy["skip-cert-verify"] = true;
@@ -1175,7 +1196,10 @@ std::string netchToSurge(std::vector<nodeInfo> &nodes, std::string &base_conf, s
         case SPEEDTEST_MESSAGE_FOUNDTROJAN:
             if(surge_ver < 4)
                 continue;
+            host = GetMember(json, "Host");
             proxy = "trojan, " + hostname + ", " + port + ", password=" + password;
+            if(host.size())
+                proxy += ", sni=" + host;
             if(ext.skip_cert_verify)
                 proxy += ", skip-cert-verify=1";
             break;
@@ -1188,13 +1212,13 @@ std::string netchToSurge(std::vector<nodeInfo> &nodes, std::string &base_conf, s
         if(ext.udp)
             proxy += ", udp-relay=true";
 
+        remarks_list.emplace_back(remark);
         if(ext.nodelist)
             output_nodelist += remark + " = " + proxy + "\n";
         else
         {
             ini.Set("{NONAME}", remark + " = " + proxy);
             nodelist.emplace_back(x);
-            remarks_list.emplace_back(remark);
         }
     }
 
@@ -1592,7 +1616,7 @@ void netchToQuan(std::vector<nodeInfo> &nodes, INIReader &ini, std::vector<rules
 {
     rapidjson::Document json;
     std::string type;
-    std::string remark, hostname, port, method, password;
+    std::string remark, hostname, port, method, username, password;
     std::string plugin, pluginopts;
     std::string protocol, protoparam, obfs, obfsparam;
     std::string id, aid, transproto, faketype, host, edge, path, quicsecure, quicsecret;
@@ -1645,6 +1669,8 @@ void netchToQuan(std::vector<nodeInfo> &nodes, INIReader &ini, std::vector<rules
                     proxyStr += "[Rr][Nn]Edge: " + edge;
                 proxyStr += "\"";
             }
+            if(ext.skip_cert_verify)
+                proxyStr += ", certificate=0";
 
             if(ext.nodelist)
                 proxyStr = "vmess://" + urlsafe_base64_encode(proxyStr);
@@ -1692,11 +1718,58 @@ void netchToQuan(std::vector<nodeInfo> &nodes, INIReader &ini, std::vector<rules
                 }
             }
             break;
+        case SPEEDTEST_MESSAGE_FOUNDHTTP:
+            username = GetMember(json, "Username");
+            host = GetMember(json, "Host");
+            tlssecure = GetMember(json, "TLSSecure") == "true";
+
+            proxyStr = remark + " = http, upstream-proxy-address=" + hostname + ", upstream-proxy-port=" + port + ", group=" + x.group;
+            if(username.size() && password.size())
+                proxyStr += ", upstream-proxy-auth=true, upstream-proxy-username=" + username + ", upstream-proxy-password=" + password;
+            else
+                proxyStr += ", upstream-proxy-auth=false";
+
+            if(tlssecure)
+            {
+                proxyStr += ", over-tls=true";
+                if(host.size())
+                    proxyStr += ", tls-host=" + host;
+            }
+            if(ext.skip_cert_verify)
+                proxyStr += ", certificate=0";
+
+            if(ext.nodelist)
+                proxyStr = "http://" + urlsafe_base64_encode(proxyStr);
+            break;
+        case SPEEDTEST_MESSAGE_FOUNDSOCKS:
+            username = GetMember(json, "Username");
+            host = GetMember(json, "Host");
+            tlssecure = GetMember(json, "TLSSecure") == "true";
+
+            proxyStr = remark + " = socks, upstream-proxy-address=" + hostname + ", upstream-proxy-port=" + port + ", group=" + x.group;
+            if(username.size() && password.size())
+                proxyStr += ", upstream-proxy-auth=true, upstream-proxy-username=" + username + ", upstream-proxy-password=" + password;
+            else
+                proxyStr += ", upstream-proxy-auth=false";
+
+            if(tlssecure)
+            {
+                proxyStr += ", over-tls=true";
+                if(host.size())
+                    proxyStr += ", tls-host=" + host;
+            }
+            if(ext.skip_cert_verify)
+                proxyStr += ", certificate=0";
+
+            if(ext.nodelist)
+                proxyStr = "socks://" + urlsafe_base64_encode(proxyStr);
+            break;
         default:
             continue;
         }
 
         ini.Set("{NONAME}", proxyStr);
+        remarks_list.emplace_back(remark);
         nodelist.emplace_back(x);
     }
 
@@ -1903,8 +1976,8 @@ void netchToQuanX(std::vector<nodeInfo> &nodes, INIReader &ini, std::vector<rule
             proxyStr += ", udp-relay=true";
         proxyStr += ", tag=" + remark;
 
-        remarks_list.push_back(remark);
         ini.Set("{NONAME}", proxyStr);
+        remarks_list.emplace_back(remark);
         nodelist.emplace_back(x);
     }
 

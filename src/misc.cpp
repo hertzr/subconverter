@@ -502,11 +502,21 @@ std::string getUrlArg(const std::string &url, const std::string &request)
     }
     */
     std::string pattern = request + "=";
-    std::string::size_type pos = url.rfind(pattern);
-    if(pos != url.npos)
+    std::string::size_type pos = url.size();
+    while(pos)
     {
-        pos += pattern.size();
-        return url.substr(pos, url.find("&", pos) - pos);
+        pos = url.rfind(pattern, pos);
+        if(pos != url.npos)
+        {
+            if(pos == 0 || url[pos - 1] == '&' || url[pos - 1] == '?')
+            {
+                pos += pattern.size();
+                return url.substr(pos, url.find("&", pos) - pos);
+            }
+        }
+        else
+            break;
+        pos--;
     }
     return std::string();
 }
@@ -604,7 +614,7 @@ bool regMatch(const std::string &src, const std::string &match)
 bool regMatch(const std::string &src, const std::string &target)
 {
     jp::Regex reg;
-    reg.setPattern(target).addModifier("gm").addPcre2Option(PCRE2_ANCHORED|PCRE2_ENDANCHORED).compile();
+    reg.setPattern(target).addModifier("gm").addPcre2Option(PCRE2_ANCHORED|PCRE2_ENDANCHORED|PCRE2_UTF).compile();
     if(!reg)
         return false;
     return reg.match(src);
@@ -613,7 +623,7 @@ bool regMatch(const std::string &src, const std::string &target)
 bool regFind(const std::string &src, const std::string &target)
 {
     jp::Regex reg;
-    reg.setPattern(target).addModifier("gm").compile();
+    reg.setPattern(target).addModifier("gm").addPcre2Option(PCRE2_UTF).compile();
     if(!reg)
         return false;
     return reg.match(src);
@@ -622,7 +632,7 @@ bool regFind(const std::string &src, const std::string &target)
 std::string regReplace(const std::string &src, const std::string &target, const std::string &rep)
 {
     jp::Regex reg;
-    reg.setPattern(target).addModifier("gm").compile();
+    reg.setPattern(target).addModifier("gm").addPcre2Option(PCRE2_UTF).compile();
     if(!reg)
         return src;
     return reg.replace(src, rep);
