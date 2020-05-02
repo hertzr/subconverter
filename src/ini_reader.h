@@ -22,6 +22,7 @@ enum
 typedef std::map<std::string, std::multimap<std::string, std::string>> ini_data_struct;
 typedef std::multimap<std::string, std::string> string_multimap;
 typedef std::vector<std::string> string_array;
+typedef std::string::size_type string_size;
 
 class INIReader
 {
@@ -240,7 +241,7 @@ public:
                 strLine.erase(lineSize - 1);
                 lineSize--;
             }
-            if(!lineSize || strLine[0] == ';' || strLine[0] == '#' || (lineSize >= 2 && strLine[0] == '/' && strLine[1] == '/')) //empty lines and comments are ignored
+            if((!lineSize || strLine[0] == ';' || strLine[0] == '#' || (lineSize >= 2 && strLine[0] == '/' && strLine[1] == '/')) && !inDirectSaveSection) //empty lines and comments are ignored
                 continue;
             if(strLine[0] == '[' && strLine[lineSize - 1] == ']') //is a section title
             {
@@ -904,20 +905,29 @@ public:
 
         for(auto &x : section_order)
         {
+            string_size strsize = 0;
             content += "[" + x + "]\n";
             if(ini_content.find(x) != ini_content.end())
             {
-                for(auto &y : ini_content.at(x))
+                auto section = ini_content.at(x);
+                if(section.empty())
                 {
-                    if(y.first != "{NONAME}")
-                        content += y.first + "=";
-                    content += y.second + "\n";
+                    content += "\n";
+                    continue;
+                }
+                for(auto iter = section.begin(); iter != section.end(); iter++)
+                {
+                    if(iter->first != "{NONAME}")
+                        content += iter->first + "=";
+                    content += iter->second + "\n";
+                    if(std::next(iter) == section.end())
+                        strsize = iter->second.size();
                 }
             }
-            content += "\n";
+            if(strsize)
+                content += "\n";
         }
-
-        return content.erase(content.size() - 2);
+        return content;
     }
 
     /**
